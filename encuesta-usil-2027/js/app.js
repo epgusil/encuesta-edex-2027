@@ -1,0 +1,655 @@
+/**
+ * app.js
+ * ------------------------------------------------------------------
+ * Motor de la encuesta. Depende de questions.js (COVER, SECTIONS,
+ * QUESTIONS, FINAL) ya cargado en el <head>/<body> antes que este
+ * archivo.
+ *
+ * Responsabilidades:
+ *   1. Mantener el estado (respuestas + pantalla actual).
+ *   2. Calcular en cada momento el "camino real" de pantallas según
+ *      las respuestas dadas (skip logic) — ver getOrderedScreens().
+ *   3. Renderizar cada tipo de pregunta (multi, ranking, single,
+ *      dropdown, text) con validación en tiempo real.
+ *   4. Animar la transición entre pantallas y actualizar la barra
+ *      de progreso.
+ *   5. Exponer un único punto de integración para enviar las
+ *      respuestas a un backend real — ver submitSurvey().
+ * ------------------------------------------------------------------
+ */
+
+(function () {
+  "use strict";
+
+  /* ============================== ESTADO ============================== */
+
+  const state = {
+    screenId: "cover",
+    answers: {}
+  };
+
+  const ORDINAL_BADGE = ["1°", "2°", "3°"];
+  const ORDINAL_TEXT = ["1ª", "2ª", "3ª"];
+
+  const QUESTIONS_BY_ID = {};
+  QUESTIONS.forEach((q) => { QUESTIONS_BY_ID[q.id] = q; });
+
+  /* ============================== CAMINO ACTIVO ============================== */
+
+  // Devuelve el arreglo ordenado de ids de pantalla ("cover", ...preguntas
+  // que aplican según las respuestas actuales..., "final").
+  function getOrderedScreens(answers) {
+    const ids = ["cover"];
+    QUESTIONS.forEach((q) => {
+      if (!q.condition || q.condition(answers)) ids.push(q.id);
+    });
+    ids.push("final");
+    return ids;
+  }
+
+  function getNeighborScreen(direction) {
+    const order = getOrderedScreens(state.answers);
+    const idx = order.indexOf(state.screenId);
+    const targetIdx = direction === "next" ? idx + 1 : idx - 1;
+    if (targetIdx < 0 || targetIdx >= order.length) return null;
+    return order[targetIdx];
+  }
+
+  /* ============================== VALIDACIÓN ============================== */
+
+  function isValid(screenId) {
+    if (screenId === "cover" || screenId === "final") return true;
+    const q = QUESTIONS_BY_ID[screenId];
+    const val = state.answers[q.id];
+
+    switch (q.type) {
+      case "multi": {
+        const sel = val || [];
+        const min = q.min || 1;
+        const max = q.max || sel.length || 1;
+        return sel.length >= min && sel.length <= max;
+      }
+      case "ranking": {
+        const sel = val || [];
+        return sel.length === q.rankCount;
+      }
+      case "single":
+        return !!val;
+      case "text": {
+        return q.fields.every((f) => {
+          const v = state.answers[q.id + "_" + f.key];
+          return v && v.trim().length > 0;
+        });
+      }
+      default:
+        return true;
+    }
+  }
+
+  /* ============================== TOAST ============================== */
+
+  let toastTimer = null;
+  function showToast(message) {
+    const toast = document.getElementById("toast");
+    toast.textContent = message;
+    toast.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove("show"), 2600);
+  }
+
+  /* ============================== PROGRESO ============================== */
+
+  function updateProgress(screenId) {
+    const order = getOrderedScreens(state.answers);
+    const idx = order.indexOf(screenId);
+    const total = order.length - 1;
+    const percent = total > 0 ? Math.round((idx / total) * 100) : 0;
+
+    const track = document.getElementById("progressTrack");
+    const fill = document.getElementById("progressFill");
+    fill.style.width = percent + "%";
+
+    if (screenId === "cover") {
+      track.classList.remove("visible");
+    } else {
+      track.classList.add("visible");
+    }
+    track.setAttribute("aria-hidden", screenId === "cover" ? "true" : "false");
+  }
+
+  /* ============================== NAVEGACIÓN / TRANSICIÓN ============================== */
+
+  function goTo(screenId, direction) {
+    const app = document.getElementById("app");
+    const current = app.firstElementChild;
+
+    const swap = () => {
+      app.innerHTML = "";
+      const wrapper = document.createElement("div");
+      wrapper.className = "screen " + (direction === "back" ? "dir-left" : "dir-right");
+      wrapper.innerHTML = buildScreenHTML(screenId);
+      app.appendChild(wrapper);
+      attachHandlers(screenId, wrapper);
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => wrapper.classList.add("in"));
+      });
+
+      const autofocus = wrapper.querySelector("[data-autofocus]");
+      if (autofocus && window.matchMedia("(min-width: 640px)").matches) {
+        setTimeout(() => autofocus.focus({ preventScroll: true }), 60);
+      }
+      window.scrollTo({ top: 0, behavior: "auto" });
+    };
+
+    if (current) {
+      current.classList.add(direction === "back" ? "out-right" : "out-left");
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        swap();
+      };
+      current.addEventListener("transitionend", finish, { once: true });
+      setTimeout(finish, 260);
+    } else {
+      swap();
+    }
+
+    state.screenId = screenId;
+    updateProgress(screenId);
+
+    if (screenId === "final") submitSurvey(state.answers);
+  }
+
+  function next() {
+    const screenId = state.screenId;
+    if (screenId !== "cover" && !isValid(screenId)) return;
+    const target = getNeighborScreen("next");
+    if (target) goTo(target, "next");
+  }
+
+  function back() {
+    const target = getNeighborScreen("back");
+    if (target) goTo(target, "back");
+  }
+
+  /* ============================== HTML BUILDERS ============================== */
+
+  function escapeHtml(str) {
+    return (str || "").toString()
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function buildScreenHTML(screenId) {
+    if (screenId === "cover") return buildCoverHTML();
+    if (screenId === "final") return buildFinalHTML();
+    return buildQuestionHTML(QUESTIONS_BY_ID[screenId]);
+  }
+
+  function buildCoverHTML() {
+    return `
+      <div class="cover">
+        <div class="cover-inner">
+          <p class="eyebrow">${escapeHtml(COVER.eyebrow)}</p>
+          <h1 class="cover-title">${escapeHtml(COVER.title)}</h1>
+          <p class="cover-subtitle">${escapeHtml(COVER.subtitle)}</p>
+          <p class="cover-description">${escapeHtml(COVER.description)}</p>
+          <button type="button" class="btn btn-primary btn-large" id="btnStart" data-autofocus>
+            ${escapeHtml(COVER.cta)}
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6L15 12L9 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <p class="cover-legal">${escapeHtml(COVER.legal)}</p>
+        </div>
+      </div>
+    `;
+  }
+
+  function buildFinalHTML() {
+    return `
+      <div class="final">
+        <div class="final-inner">
+          <div class="final-badge" aria-hidden="true">✓</div>
+          <h1 class="final-title">${escapeHtml(FINAL.title)}</h1>
+          <p class="final-message">${escapeHtml(FINAL.message)}</p>
+        </div>
+      </div>
+    `;
+  }
+
+  function buildQuestionHTML(q) {
+    return `
+      <div class="question-screen">
+        <div class="question-inner">
+          <p class="section-tag"><span class="section-icon" aria-hidden="true">${q.section.icon}</span>${escapeHtml(q.section.label)}</p>
+          ${q.blockNote ? `<div class="block-note">${escapeHtml(q.blockNote)}</div>` : ""}
+          <h2 class="question-prompt">${escapeHtml(q.prompt)}</h2>
+          ${q.help ? `<p class="question-help">${escapeHtml(q.help)}</p>` : ""}
+          <div class="question-body" id="questionBody">
+            ${buildBodyHTML(q)}
+          </div>
+        </div>
+        ${buildNavHTML()}
+      </div>
+    `;
+  }
+
+  function buildNavHTML() {
+    return `
+      <div class="nav-row">
+        <button type="button" class="btn btn-ghost" id="btnBack">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Atrás
+        </button>
+        <div class="nav-hint" id="navHint"></div>
+        <button type="button" class="btn btn-primary" id="btnNext">
+          Siguiente
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6L15 12L9 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    `;
+  }
+
+  function buildBodyHTML(q) {
+    switch (q.type) {
+      case "multi": return buildMultiHTML(q);
+      case "ranking": return buildRankingHTML(q);
+      case "single": return q.renderStyle === "dropdown" ? buildDropdownHTML(q) : buildSingleHTML(q);
+      case "text": return buildTextHTML(q);
+      default: return "";
+    }
+  }
+
+  function buildMultiHTML(q) {
+    const sel = state.answers[q.id] || [];
+    const cls = q.renderStyle === "grid" ? "option-grid" : "option-list";
+    const exclusiveActive = q.exclusiveValue && sel.includes(q.exclusiveValue);
+    const opts = q.options.map((opt) => {
+      const active = sel.includes(opt.value);
+      const disabled = exclusiveActive && opt.value !== q.exclusiveValue;
+      return `
+        <button type="button" class="option option-check ${active ? "active" : ""} ${disabled ? "disabled-by-exclusive" : ""}"
+          data-value="${escapeHtml(opt.value)}" ${disabled ? "disabled" : ""} aria-pressed="${active}">
+          <span class="option-mark" aria-hidden="true"></span>
+          <span class="option-label">${escapeHtml(opt.label)}</span>
+        </button>
+      `;
+    }).join("");
+    return `
+      <div class="${cls}" data-qid="${q.id}">${opts}</div>
+      <p class="select-counter" id="selectCounter"></p>
+    `;
+  }
+
+  function buildRankingHTML(q) {
+    const sel = state.answers[q.id] || [];
+    const opts = q.options.map((opt) => {
+      const rankIdx = sel.indexOf(opt.value);
+      const active = rankIdx > -1;
+      return `
+        <button type="button" class="option option-rank ${active ? "active rank-" + (rankIdx + 1) : ""}"
+          data-value="${escapeHtml(opt.value)}" aria-pressed="${active}">
+          <span class="rank-badge" aria-hidden="true">${active ? ORDINAL_BADGE[rankIdx] : ""}</span>
+          <span class="option-label">${escapeHtml(opt.label)}</span>
+        </button>
+      `;
+    }).join("");
+    return `
+      <div class="option-list" data-qid="${q.id}">${opts}</div>
+      <p class="rank-indicator" id="rankIndicator"></p>
+    `;
+  }
+
+  function buildSingleHTML(q) {
+    const sel = state.answers[q.id];
+    const cls = q.renderStyle === "grid" ? "option-grid" : "option-list";
+    const opts = q.options.map((opt) => {
+      const active = sel === opt.value;
+      return `
+        <button type="button" class="option option-radio ${active ? "active" : ""}"
+          data-value="${escapeHtml(opt.value)}" aria-pressed="${active}">
+          <span class="option-mark option-mark-round" aria-hidden="true"></span>
+          <span class="option-label">${escapeHtml(opt.label)}</span>
+        </button>
+      `;
+    }).join("");
+    return `<div class="${cls}" data-qid="${q.id}">${opts}</div>`;
+  }
+
+  function buildDropdownHTML(q) {
+    const sel = state.answers[q.id];
+    const selectedLabel = sel ? (q.options.find((o) => o.value === sel) || {}).label : "";
+    const opts = q.options.map((opt) => `
+        <li role="option" class="combobox-option ${sel === opt.value ? "active" : ""}" data-value="${escapeHtml(opt.value)}">${escapeHtml(opt.label)}</li>
+      `).join("");
+    return `
+      <div class="dropdown" data-qid="${q.id}">
+        <div class="combobox">
+          <input type="text" class="combobox-input" id="comboInput" placeholder="Escribe para buscar..."
+            autocomplete="off" role="combobox" aria-expanded="false" value="${escapeHtml(selectedLabel)}" data-autofocus>
+          <svg class="combobox-caret" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <ul class="combobox-list" id="comboList" role="listbox" hidden>${opts}</ul>
+      </div>
+    `;
+  }
+
+  function buildTextHTML(q) {
+    const fields = q.fields.map((f) => {
+      const val = state.answers[q.id + "_" + f.key] || "";
+      return `
+        <div class="text-field">
+          <label class="field-label" for="field-${q.id}-${f.key}">${escapeHtml(f.label)}</label>
+          <input type="text" class="text-input" id="field-${q.id}-${f.key}" data-field="${f.key}"
+            placeholder="${escapeHtml(f.placeholder || "")}" value="${escapeHtml(val)}" ${f === q.fields[0] ? "data-autofocus" : ""}>
+        </div>
+      `;
+    }).join("");
+    return `<div class="text-field-group" data-qid="${q.id}">${fields}</div>`;
+  }
+
+  /* ============================== HANDLERS POR TIPO ============================== */
+
+  function attachHandlers(screenId, root) {
+    if (screenId === "cover") {
+      root.querySelector("#btnStart").addEventListener("click", next);
+      return;
+    }
+    if (screenId === "final") return;
+
+    const q = QUESTIONS_BY_ID[screenId];
+    const btnBack = root.querySelector("#btnBack");
+    const btnNext = root.querySelector("#btnNext");
+
+    btnBack.addEventListener("click", back);
+    btnNext.addEventListener("click", next);
+
+    switch (q.type) {
+      case "multi": attachMultiHandlers(q, root); break;
+      case "ranking": attachRankingHandlers(q, root); break;
+      case "single":
+        if (q.renderStyle === "dropdown") attachDropdownHandlers(q, root);
+        else attachSingleHandlers(q, root);
+        break;
+      case "text": attachTextHandlers(q, root); break;
+    }
+
+    refreshNextState();
+  }
+
+  function refreshNextState() {
+    const btnNext = document.getElementById("btnNext");
+    if (!btnNext) return;
+    const valid = isValid(state.screenId);
+    btnNext.disabled = !valid;
+    btnNext.classList.toggle("is-ready", valid);
+  }
+
+  function attachMultiHandlers(q, root) {
+    const container = root.querySelector(`.option-grid[data-qid], .option-list[data-qid]`);
+    updateSelectCounter(q);
+    container.querySelectorAll(".option").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const value = btn.getAttribute("data-value");
+        let sel = state.answers[q.id] ? [...state.answers[q.id]] : [];
+        const exclusive = q.exclusiveValue;
+
+        if (exclusive && value === exclusive) {
+          sel = sel.includes(exclusive) ? [] : [exclusive];
+        } else {
+          if (exclusive && sel.includes(exclusive)) sel = sel.filter((v) => v !== exclusive);
+          if (sel.includes(value)) {
+            sel = sel.filter((v) => v !== value);
+          } else {
+            if (sel.length >= (q.max || sel.length + 1)) {
+              showToast(`Puedes seleccionar hasta ${q.max} opción${q.max > 1 ? "es" : ""}.`);
+              return;
+            }
+            sel.push(value);
+          }
+        }
+        state.answers[q.id] = sel;
+        rerenderBody(q);
+      });
+    });
+  }
+
+  function updateSelectCounter(q) {
+    const el = document.getElementById("selectCounter");
+    if (!el) return;
+    const sel = state.answers[q.id] || [];
+    if (q.min === q.max) {
+      el.textContent = `Seleccionadas: ${sel.length} de ${q.max}`;
+    } else {
+      el.textContent = `Seleccionadas: ${sel.length} (máximo ${q.max})`;
+    }
+  }
+
+  function attachRankingHandlers(q, root) {
+    const container = root.querySelector(".option-list[data-qid]");
+    updateRankIndicator(q);
+    container.querySelectorAll(".option").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const value = btn.getAttribute("data-value");
+        let sel = state.answers[q.id] ? [...state.answers[q.id]] : [];
+        if (sel.includes(value)) {
+          sel = sel.filter((v) => v !== value);
+        } else {
+          if (sel.length >= q.rankCount) {
+            showToast(`Ya elegiste tus ${q.rankCount} preferencias. Toca una opción marcada para quitarla.`);
+            return;
+          }
+          sel.push(value);
+        }
+        state.answers[q.id] = sel;
+        rerenderBody(q);
+      });
+    });
+  }
+
+  function updateRankIndicator(q) {
+    const el = document.getElementById("rankIndicator");
+    if (!el) return;
+    const sel = state.answers[q.id] || [];
+    if (sel.length < q.rankCount) {
+      el.textContent = `Selecciona tu ${ORDINAL_TEXT[sel.length]} preferencia`;
+    } else {
+      el.textContent = "Ranking completo. Toca una opción marcada para cambiarla.";
+    }
+  }
+
+  function attachSingleHandlers(q, root) {
+    const container = root.querySelector(".option-grid[data-qid], .option-list[data-qid]");
+    container.querySelectorAll(".option").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.answers[q.id] = btn.getAttribute("data-value");
+        rerenderBody(q);
+      });
+    });
+  }
+
+  function attachDropdownHandlers(q, root) {
+    const input = root.querySelector("#comboInput");
+    const list = root.querySelector("#comboList");
+    const items = Array.from(list.querySelectorAll(".combobox-option"));
+    let activeIdx = -1;
+
+    function normalize(str) {
+      return (str || "").toString().trim().toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    }
+
+    function openList() {
+      list.hidden = false;
+      input.setAttribute("aria-expanded", "true");
+    }
+    function closeList() {
+      list.hidden = true;
+      input.setAttribute("aria-expanded", "false");
+      activeIdx = -1;
+      items.forEach((li) => li.classList.remove("highlight"));
+    }
+    function filter() {
+      const q2 = normalize(input.value);
+      let firstVisible = null;
+      items.forEach((li) => {
+        const match = normalize(li.textContent).includes(q2);
+        li.style.display = match ? "" : "none";
+        if (match && firstVisible === null) firstVisible = li;
+      });
+      activeIdx = -1;
+      items.forEach((li) => li.classList.remove("highlight"));
+    }
+    function selectItem(li) {
+      const value = li.getAttribute("data-value");
+      state.answers[q.id] = value;
+      input.value = li.textContent.trim();
+      items.forEach((it) => it.classList.remove("active"));
+      li.classList.add("active");
+      closeList();
+      refreshNextState();
+    }
+
+    input.addEventListener("focus", () => { openList(); filter(); });
+    input.addEventListener("input", filter);
+    input.addEventListener("click", () => { openList(); filter(); });
+
+    input.addEventListener("keydown", (e) => {
+      const visible = items.filter((li) => li.style.display !== "none");
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        openList();
+        activeIdx = Math.min(activeIdx + 1, visible.length - 1);
+        visible.forEach((li) => li.classList.remove("highlight"));
+        if (visible[activeIdx]) {
+          visible[activeIdx].classList.add("highlight");
+          visible[activeIdx].scrollIntoView({ block: "nearest" });
+        }
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        activeIdx = Math.max(activeIdx - 1, 0);
+        visible.forEach((li) => li.classList.remove("highlight"));
+        if (visible[activeIdx]) {
+          visible[activeIdx].classList.add("highlight");
+          visible[activeIdx].scrollIntoView({ block: "nearest" });
+        }
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (activeIdx > -1 && visible[activeIdx]) {
+          selectItem(visible[activeIdx]);
+        } else if (visible.length === 1) {
+          selectItem(visible[0]);
+        }
+      } else if (e.key === "Escape") {
+        closeList();
+        input.blur();
+      }
+    });
+
+    items.forEach((li) => {
+      li.addEventListener("mousedown", (e) => e.preventDefault());
+      li.addEventListener("click", () => selectItem(li));
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!root.contains(e.target)) closeList();
+    });
+
+    input.addEventListener("blur", () => {
+      setTimeout(() => {
+        if (!state.answers[q.id]) input.value = "";
+        closeList();
+      }, 120);
+    });
+  }
+
+  function attachTextHandlers(q, root) {
+    root.querySelectorAll(".text-input").forEach((input) => {
+      const fieldKey = input.getAttribute("data-field");
+      input.addEventListener("input", () => {
+        state.answers[q.id + "_" + fieldKey] = input.value;
+        refreshNextState();
+      });
+    });
+  }
+
+  // Vuelve a pintar solo el cuerpo de la pregunta (sin reanimar toda la
+  // pantalla) cada vez que cambia una selección, para feedback inmediato.
+  function rerenderBody(q) {
+    const body = document.getElementById("questionBody");
+    if (!body) return;
+    body.innerHTML = buildBodyHTML(q);
+    switch (q.type) {
+      case "multi": attachMultiHandlers(q, document.getElementById("app")); break;
+      case "ranking": attachRankingHandlers(q, document.getElementById("app")); break;
+      case "single": attachSingleHandlers(q, document.getElementById("app")); break;
+    }
+    refreshNextState();
+  }
+
+  /* ============================== ATAJOS DE TECLADO ============================== */
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    const tag = (e.target.tagName || "").toLowerCase();
+    if (tag === "textarea") return;
+    // Si el foco está en el buscador del dropdown, ese componente ya
+    // maneja su propio Enter (seleccionar opción resaltada).
+    if (e.target.id === "comboInput") return;
+    const btnNext = document.getElementById("btnNext");
+    const btnStart = document.getElementById("btnStart");
+    if (btnStart) { btnStart.click(); return; }
+    if (btnNext && !btnNext.disabled) btnNext.click();
+  });
+
+  /* ============================== PUNTO DE INTEGRACIÓN ============================== */
+
+  const SURVEY_STORAGE_KEY = "usil-encuesta-2027-respuestas";
+
+  /**
+   * submitSurvey(answers)
+   * ------------------------------------------------------------------
+   * Se llama automáticamente al llegar a la pantalla final. Por defecto
+   * NO depende de ningún backend: guarda la respuesta en localStorage
+   * (solo en el navegador de la persona) para que el flujo funcione
+   * de punta a punta sin bloquear nada.
+   *
+   * Para conectar un backend real, reemplaza el cuerpo de esta función.
+   * Dos ejemplos comunes:
+   *
+   *   // A) Enviar a un endpoint propio (API REST, Google Apps Script,
+   *   //    Formspree, Airtable, etc.):
+   *   fetch("https://TU-ENDPOINT-AQUI", {
+   *     method: "POST",
+   *     headers: { "Content-Type": "application/json" },
+   *     body: JSON.stringify({ answers, submittedAt: new Date().toISOString() })
+   *   }).catch((err) => console.error("No se pudo enviar la encuesta:", err));
+   *
+   *   // B) Enviar a Google Sheets vía un Google Apps Script publicado
+   *   //    como Web App (method: POST, mode: "no-cors" si aplica).
+   *
+   * Ninguna integración debe ser bloqueante: la pantalla de agradecimiento
+   * ya se muestra independientemente de si el envío tiene éxito o no.
+   */
+  function submitSurvey(answers) {
+    try {
+      const payload = { answers, submittedAt: new Date().toISOString() };
+      const existing = JSON.parse(localStorage.getItem(SURVEY_STORAGE_KEY) || "[]");
+      existing.push(payload);
+      localStorage.setItem(SURVEY_STORAGE_KEY, JSON.stringify(existing));
+      console.log("Encuesta completada (guardada localmente):", payload);
+    } catch (err) {
+      console.warn("No se pudo guardar la respuesta localmente:", err);
+    }
+
+    // TODO: reemplazar por el envío real al backend elegido (ver comentario arriba).
+  }
+
+  /* ============================== INICIO ============================== */
+
+  document.addEventListener("DOMContentLoaded", () => {
+    goTo("cover", "next");
+  });
+})();
