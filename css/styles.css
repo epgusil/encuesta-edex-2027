@@ -5,15 +5,15 @@
 
 /* ---------- Tokens de diseño ---------- */
 :root {
-  /* Color: institucional vino/burdeos + acento dorado, sobre papel cálido */
+  /* Color: institucional azul + acento celeste, sobre papel cálido */
   --color-bg: #F7F3EC;
   --color-surface: #FFFFFF;
   --color-ink: #221E1B;
   --color-ink-soft: #5C564C;
-  --color-primary: #7A1730;
-  --color-primary-dark: #591021;
+  --color-primary: #17317a;
+  --color-primary-dark: #101759;
   --color-primary-soft: #F3E1E5;
-  --color-accent: #B98332;
+  --color-accent: #326cb9;
   --color-accent-soft: #F1E4CC;
   --color-line: #E6DECF;
   --color-line-strong: #CFC3AC;
@@ -106,6 +106,7 @@ img, svg { display: block; max-width: 100%; }
   html { scroll-behavior: auto; }
   .screen, .progress-fill, .option, .combobox-list, .toast { transition: none !important; }
   .screen { opacity: 1 !important; transform: none !important; }
+  .keycap-float { animation: none !important; transform: rotateZ(var(--rot)) !important; }
 }
 
 /* ==========================================================================
@@ -113,6 +114,7 @@ img, svg { display: block; max-width: 100%; }
    ========================================================================== */
 
 .cover {
+  position: relative; /* ancla del hero en desktop */
   min-height: 100vh;
   min-height: 100dvh;
   display: flex;
@@ -164,6 +166,100 @@ img, svg { display: block; max-width: 100%; }
   line-height: 1.6;
   max-width: 56ch;
 }
+
+/* ---------- Hero de teclas retro flotantes ----------
+   Mobile: franja horizontal en flujo normal, entre el botón y la nota
+   legal (forma de diamante achatado). Desktop (≥900px): se saca del
+   flujo y se ancla a la derecha de .cover, en forma de diamante vertical. */
+
+.cover-hero {
+  --key-face: 2.6rem;
+  --key-icon: 1.05rem;
+  --key-label-size: .52rem;
+  --key-label-w: 3.9rem;
+
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  height: clamp(190px, 52vw, 250px);
+  margin: 3.25rem 0 .25rem;
+}
+
+@media (min-width: 900px) {
+  .cover-hero {
+    --key-face: 4.75rem;
+    --key-icon: 1.9rem;
+    --key-label-size: .66rem;
+    --key-label-w: 7.4rem;
+
+    position: absolute;
+    top: 50%;
+    right: clamp(1.5rem, 6vw, 5rem);
+    transform: translateY(-50%);
+    width: min(44%, 520px);
+    max-width: 520px;
+    height: clamp(420px, 42vw, 560px);
+    margin: 0;
+  }
+}
+
+.keycap {
+  position: absolute;
+  top: var(--ky);
+  left: var(--kx);
+  transform: translate(-50%, -50%);
+}
+@media (min-width: 900px) {
+  .keycap { top: var(--ky-d); left: var(--kx-d); }
+}
+
+.keycap-float {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: rotateZ(var(--rot));
+  animation: floatKey var(--dur) ease-in-out infinite;
+  animation-delay: var(--delay);
+  transition: transform .25s ease;
+}
+.keycap-float:hover {
+  animation-play-state: paused;
+  transform: translateY(-4px) rotateZ(0deg) scale(1.06);
+}
+
+.keycap-face {
+  width: var(--key-face);
+  height: var(--key-face);
+  border-radius: 16px;
+  background: var(--key-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: perspective(500px) rotateX(12deg) rotateY(-6deg);
+  box-shadow:
+    inset 0 3px 0 rgba(255, 255, 255, .38),
+    inset 0 -5px 0 rgba(0, 0, 0, .22),
+    0 14px 22px -8px rgba(34, 30, 27, .38);
+}
+.keycap-face svg { width: var(--key-icon); height: var(--key-icon); }
+
+.keycap-label {
+  margin-top: .4rem;
+  max-width: var(--key-label-w);
+  text-align: center;
+  font-size: var(--key-label-size);
+  font-weight: 600;
+  line-height: 1.22;
+  color: var(--color-ink-soft);
+}
+
+@keyframes floatKey {
+  0%   { transform: translateY(0)     rotateZ(var(--rot)); }
+  50%  { transform: translateY(-14px) rotateZ(calc(var(--rot) * -1)); }
+  100% { transform: translateY(0)     rotateZ(var(--rot)); }
+}
+
+
 
 /* ==========================================================================
    Pantallas de pregunta

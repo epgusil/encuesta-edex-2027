@@ -31,6 +31,59 @@
   const ORDINAL_BADGE = ["1°", "2°", "3°"];
   const ORDINAL_TEXT = ["1ª", "2ª", "3ª"];
 
+  // Teclas retro flotantes de la portada — un keycap por eje temático de
+  // Educación Ejecutiva. Cada tecla tiene dos posiciones porcentuales
+  // (dentro de .cover-hero, que cambia de tamaño/orientación por breakpoint):
+  //   xd/yd -> desktop (≥900px): forma de diamante vertical, con jitter
+  //            para que no se vea como grilla ni como anillo perfecto.
+  //   xm/ym -> mobile (<900px): mismo espíritu de diamante pero achatado
+  //            horizontalmente, para una franja corta y ancha.
+  // rot/dur/delay controlan la animación de flotado (floatKey en styles.css).
+  const KEYCAPS = [
+    {
+      label: "Derecho y Gobierno Corporativo",
+      color: "#2E86AB",
+      xd: 40, yd: 20, xm: 5, ym: 50, rot: -6, dur: 7.2, delay: -0.4,
+      icon: '<path d="M12 3v14"/><path d="M5 6h14"/><path d="M5 6l-3 6a3 3 0 0 0 6 0z"/><path d="M19 6l-3 6a3 3 0 0 0 6 0z"/><path d="M8 21h8"/><path d="M12 17v4"/>'
+    },
+    {
+      label: "Educación",
+      color: "#E4572E",
+      xd: 78, yd: 46, xm: 24, ym: 18, rot: 5, dur: 8.1, delay: -2.1,
+      icon: '<path d="M12 3 2 8l10 5 10-5-10-5z"/><path d="M6 10.5V16c0 1.5 2.5 3 6 3s6-1.5 6-3v-5.5"/><path d="M22 8v6"/>'
+    },
+    {
+      label: "Gestión Pública",
+      color: "#6A4C93",
+      xd: 55, yd: 90, xm: 55, ym: 15, rot: -4, dur: 6.6, delay: -3.4,
+      icon: '<path d="M3 21h18"/><path d="M4 21V10"/><path d="M20 21V10"/><path d="M2 10l10-6 10 6"/><path d="M8 21v-7"/><path d="M12 21v-7"/><path d="M16 21v-7"/>'
+    },
+    {
+      label: "Innovación e IA",
+      color: "#1B998B",
+      xd: 2, yd: 42, xm: 95, ym: 48, rot: 7, dur: 7.8, delay: -1.1,
+      icon: '<rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4"/>'
+    },
+    {
+      label: "Negocios y ESG",
+      color: "#3E8914",
+      xd: 52, yd: 58, xm: 70, ym: 85, rot: 4, dur: 8.4, delay: -0.9,
+      icon: '<path d="M3 17l5-6 4 3 7-9"/><path d="M15 5h4v4"/><path d="M4 21c3-1 5-3 5-6"/>'
+    },
+    {
+      label: "Liderazgo y Gestión de Personas",
+      color: "#C1666B",
+      xd: 20, yd: 84, xm: 38, ym: 88, rot: -8, dur: 6.9, delay: -2.8,
+      icon: '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="8" r="2.4"/><path d="M15.5 14.2c2.6.5 4.5 2.8 4.5 5.8"/>'
+    },
+    {
+      label: "Salud",
+      color: "#F4B942",
+      xd: 30, yd: 54, xm: 46, ym: 50, rot: -3, dur: 7.5, delay: -3.9,
+      icon: '<path d="M12 4v16M4 12h16"/><rect x="4" y="4" width="16" height="16" rx="4"/>'
+    }
+  ];
+
   const QUESTIONS_BY_ID = {};
   QUESTIONS.forEach((q) => { QUESTIONS_BY_ID[q.id] = q; });
 
@@ -189,6 +242,20 @@
     return buildQuestionHTML(QUESTIONS_BY_ID[screenId]);
   }
 
+  function buildCoverHeroHTML() {
+    const keys = KEYCAPS.map((k) => `
+      <div class="keycap" style="--kx:${k.xm}%;--ky:${k.ym}%;--kx-d:${k.xd}%;--ky-d:${k.yd}%;">
+        <div class="keycap-float" style="--rot:${k.rot}deg;--dur:${k.dur}s;--delay:${k.delay}s;">
+          <div class="keycap-face" style="--key-color:${k.color};">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${k.icon}</svg>
+          </div>
+          <span class="keycap-label">${escapeHtml(k.label)}</span>
+        </div>
+      </div>
+    `).join("");
+    return `<div class="cover-hero" aria-hidden="true">${keys}</div>`;
+  }
+
   function buildCoverHTML() {
     return `
       <div class="cover">
@@ -201,6 +268,7 @@
             ${escapeHtml(COVER.cta)}
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6L15 12L9 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
+          ${buildCoverHeroHTML()}
           <p class="cover-legal">${escapeHtml(COVER.legal)}</p>
         </div>
       </div>
