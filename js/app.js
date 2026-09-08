@@ -724,43 +724,73 @@
 
   const SURVEY_STORAGE_KEY = "usil-encuesta-2027-respuestas";
 
+  // Pega aquí la URL de tu Web App de Google Apps Script (termina en
+  // "/exec"). Mientras esté vacía, la encuesta sigue funcionando normal:
+  // solo guarda una copia local en localStorage y no envía nada afuera.
+  const GOOGLE_SHEETS_ENDPOINT = "https://script.google.com/macros/s/AKfycbyINl-pQsPxzxLydUWls43nToqGleUF-nHdxaTozOQHxgEv--v0meEpAP4XRg2r1zhL/exec";
+
+  // Convierte answers (con arreglos para preguntas multi/ranking) en un
+  // objeto plano de una sola fila: los arreglos se unen con "; " —en las
+  // preguntas de ranking eso además conserva el orden de preferencia
+  // (el primer valor de la lista es la 1ª preferencia, el segundo la 2ª,
+  // etc.). Las claves quedan igual que en `answers` (p1, p2, p4a_pais...)
+  // para que cualquier pregunta nueva que se agregue en questions.js
+  // fluya sola, sin tocar este mapeo.
+  function flattenAnswersForSheet(answers) {
+    const flat = {};
+    Object.keys(answers).forEach((key) => {
+      const val = answers[key];
+      flat[key] = Array.isArray(val) ? val.join("; ") : val;
+    });
+    return flat;
+  }
+
   /**
    * submitSurvey(answers)
    * ------------------------------------------------------------------
-   * Se llama automáticamente al llegar a la pantalla final. Por defecto
-   * NO depende de ningún backend: guarda la respuesta en localStorage
-   * (solo en el navegador de la persona) para que el flujo funcione
-   * de punta a punta sin bloquear nada.
+   * Se llama automáticamente al llegar a la pantalla final.
    *
-   * Para conectar un backend real, reemplaza el cuerpo de esta función.
-   * Dos ejemplos comunes:
+   * 1) Siempre guarda una copia en localStorage (solo en el navegador
+   *    de la persona), para que el flujo funcione de punta a punta
+   *    incluso si el envío al backend falla o no está configurado.
+   * 2) Si GOOGLE_SHEETS_ENDPOINT tiene una URL, además envía la
+   *    respuesta a esa Web App de Apps Script (ver README.md para el
+   *    código del script y los pasos de despliegue).
    *
-   *   // A) Enviar a un endpoint propio (API REST, Google Apps Script,
-   *   //    Formspree, Airtable, etc.):
-   *   fetch("https://TU-ENDPOINT-AQUI", {
-   *     method: "POST",
-   *     headers: { "Content-Type": "application/json" },
-   *     body: JSON.stringify({ answers, submittedAt: new Date().toISOString() })
-   *   }).catch((err) => console.error("No se pudo enviar la encuesta:", err));
-   *
-   *   // B) Enviar a Google Sheets vía un Google Apps Script publicado
-   *   //    como Web App (method: POST, mode: "no-cors" si aplica).
-   *
-   * Ninguna integración debe ser bloqueante: la pantalla de agradecimiento
-   * ya se muestra independientemente de si el envío tiene éxito o no.
+   * mode: "no-cors" + Content-Type "text/plain" evitan el preflight
+   * CORS que Apps Script no responde bien; igual el script del lado
+   * del servidor puede leer y parsear el JSON del body sin problema.
+   * Con "no-cors" la respuesta llega "opaca" (no se puede leer su
+   * contenido ni status), así que el envío es "fire and forget": no
+   * bloquea ni condiciona la pantalla de agradecimiento.
    */
   function submitSurvey(answers) {
+    const payload = { answers, submittedAt: new Date().toISOString() };
+
     try {
-      const payload = { answers, submittedAt: new Date().toISOString() };
       const existing = JSON.parse(localStorage.getItem(SURVEY_STORAGE_KEY) || "[]");
       existing.push(payload);
       localStorage.setItem(SURVEY_STORAGE_KEY, JSON.stringify(existing));
-      console.log("Encuesta completada (guardada localmente):", payload);
+      console.log("Encuesta completada (copia local guardada):", payload);
     } catch (err) {
-      console.warn("No se pudo guardar la respuesta localmente:", err);
+      console.warn("No se pudo guardar la copia local:", err);
     }
 
-    // TODO: reemplazar por el envío real al backend elegido (ver comentario arriba).
+    if (!GOOGLE_SHEETS_ENDPOINT) return;
+
+    const sheetPayload = {
+      submittedAt: payload.submittedAt,
+      answers: flattenAnswersForSheet(answers)
+    };
+
+    fetch(GOOGLE_SHEETS_ENDPOINT, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(sheetPayload)
+    }).catch((err) => {
+      console.warn("No se pudo enviar la encuesta a Google Sheets:", err);
+    });
   }
 
   /* ============================== INICIO ============================== */
