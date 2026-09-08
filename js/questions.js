@@ -20,6 +20,16 @@
  *     dadas hasta el momento. Si depende de una pregunta que aún no
  *     se contesta, debe devolver `false` (así la pregunta condicional
  *     aparece recién cuando se sabe que corresponde).
+ *   - Los ids de cada pregunta (p1, p2, p3...) son identificadores
+ *     internos arbitrarios — NO reflejan el orden de aparición en la
+ *     encuesta (ese orden lo define únicamente la posición de cada
+ *     objeto dentro del arreglo QUESTIONS). Se mantienen sin
+ *     renumerar entre reordenamientos para no romper las condiciones
+ *     que los referencian (answers.p3, answers.p4b_ciudad, etc.).
+ *   - El indicador "Escoge N opciones" / "Ordena tus N preferencias"
+ *     y, en las preguntas de ranking, la explicación de cómo funciona
+ *     el ranking, se generan dinámicamente en app.js a partir de
+ *     type/min/max/rankCount — no se escriben a mano aquí.
  * ------------------------------------------------------------------
  */
 
@@ -28,11 +38,12 @@
 const COVER = {
   eyebrow: "USIL | EDUCACIÓN EJECUTIVA | ENCUESTA 2027",
   title: "¿Qué te gustaría aprender en 2027?",
-  subtitle: "Ayúdanos a diseñar la próxima oferta de Educación Ejecutiva USIL",
+  subtitle: "Tu experiencia nos ayudará a diseñar la próxima oferta de Educación Ejecutiva USIL",
   description:
-    "Queremos conocer qué necesitas aprender y cómo te gustaría capacitarte. " +
-    "Tus respuestas nos ayudarán a priorizar temas, modalidades y horarios " +
-    "para nuestra oferta de 2027.",
+    "Queremos conocer tus prioridades de actualización y especialización profesional, " +
+    "así como tus preferencias de modalidad, duración y horarios. Tus respuestas nos " +
+    "permitirán desarrollar una oferta académica relevante y alineada con las nuevas " +
+    "demandas del entorno laboral.",
   legal:
     "Completar la encuesta toma aproximadamente 6 a 8 minutos. Los resultados " +
     "se analizarán de forma agrupada para orientar la planificación académica. " +
@@ -43,15 +54,15 @@ const COVER = {
 /* ============================== SECCIONES ============================== */
 
 const SECTIONS = {
-  intereses:    { icon: "🎯", label: "Tus intereses de capacitación" },
-  modalidad:    { icon: "🕒", label: "Cómo te gustaría capacitarte" },
-  ubicacion:    { icon: "📍", label: "Desde dónde participarías" },
-  duracion:     { icon: "⏳", label: "Duración de la capacitación" },
-  horarios:     { icon: "📅", label: "Días y horarios" },
-  dificultades: { icon: "🧩", label: "Qué podría dificultar tu capacitación" },
-  experiencia:  { icon: "🎓", label: "Tu experiencia con Educación Ejecutiva USIL" },
-  perfil:       { icon: "💼", label: "Tu perfil profesional" },
-  sector:       { icon: "🏢", label: "Tu sector de trabajo" }
+  experiencia:        { icon: "🎓", label: "Tu experiencia con Educación Ejecutiva USIL" },
+  perfil:              { icon: "💼", label: "Tu perfil profesional" },
+  sector:              { icon: "🏢", label: "Tu sector de trabajo" },
+  intereses:           { icon: "🎯", label: "Tus intereses de capacitación" },
+  modalidad:           { icon: "🕒", label: "Cómo te gustaría capacitarte" },
+  ubicacion:           { icon: "📍", label: "Desde dónde participarías" },
+  ubicacionDuracion:   { icon: "🧭", label: "Ubicación y duración" },
+  horarios:            { icon: "📅", label: "Días y horarios" },
+  dificultades:        { icon: "🧩", label: "Qué podría dificultar tu capacitación" }
 };
 
 /* ============================== HELPERS ============================== */
@@ -72,9 +83,9 @@ function textIncludesAny(str, needles) {
   return needles.some((needle) => n.includes(needle));
 }
 
-// P3 se responde como ranking (array ordenado de values). Estas
-// condiciones solo necesitan saber si un value está EN el ranking,
-// sin importar la posición (1ª o 2ª preferencia cuentan igual).
+// P3 (modalidad) se responde como ranking (array ordenado de values).
+// Estas condiciones solo necesitan saber si un value está EN el
+// ranking, sin importar la posición (1ª o 2ª preferencia cuentan igual).
 function p3Includes(answers, values) {
   const ranking = answers.p3;
   if (!Array.isArray(ranking) || ranking.length === 0) return false;
@@ -95,6 +106,104 @@ const MODALIDADES_PRESENCIALES = ["presencial", "semipresencial"];
 /* ============================== PREGUNTAS ============================== */
 
 const QUESTIONS = [
+
+  /* ---------- Sección: Tu experiencia con Educación Ejecutiva USIL ---------- */
+
+  {
+    id: "p9",
+    section: SECTIONS.experiencia,
+    prompt: "¿Cuál de las siguientes opciones describe tu experiencia más reciente como alumno de Educación Ejecutiva USIL?",
+    help: "Si estudiaste en varios años, considera el más reciente. Si actualmente eres alumno, marca la primera alternativa.",
+    type: "single",
+    renderStyle: "list",
+    options: [
+      { value: "actual-alumno", label: "Actualmente soy alumno de Educación Ejecutiva USIL" },
+      { value: "alumno-2026", label: "Fui alumno de Educación Ejecutiva USIL en 2026" },
+      { value: "alumno-2025", label: "Fui alumno de Educación Ejecutiva USIL en 2025" },
+      { value: "alumno-2024-antes", label: "Fui alumno de Educación Ejecutiva USIL en 2024 o antes" },
+      { value: "no-alumno", label: "No he sido alumno de Educación Ejecutiva USIL" },
+      { value: "no-recuerda-anio", label: "No recuerdo el año en que fui alumno" }
+    ]
+  },
+
+  /* ---------- Sección: Tu perfil profesional ---------- */
+
+  {
+    id: "p10",
+    section: SECTIONS.perfil,
+    prompt: "¿En qué área o función te desempeñas principalmente?",
+    help: "Selecciona la opción que mejor describa el trabajo que realizas, independientemente del sector de tu organización. Si actualmente no trabajas, considera tu experiencia laboral más reciente.",
+    type: "single",
+    renderStyle: "grid",
+    options: [
+      { value: "administracion-direccion-general", label: "Administración y dirección general" },
+      { value: "finanzas-contabilidad-presupuesto", label: "Finanzas, contabilidad y presupuesto" },
+      { value: "marketing-comunicacion", label: "Marketing y comunicación" },
+      { value: "ventas-gestion-comercial", label: "Ventas y gestión comercial" },
+      { value: "rrhh-gestion-personas", label: "Recursos humanos y gestión de personas" },
+      { value: "operaciones-produccion-calidad", label: "Operaciones, producción y calidad" },
+      { value: "logistica-compras-abastecimiento", label: "Logística, compras y abastecimiento" },
+      { value: "tecnologia-sistemas-datos", label: "Tecnología, sistemas y análisis de datos" },
+      { value: "asesoria-legal-cumplimiento", label: "Asesoría legal y cumplimiento normativo" },
+      { value: "docencia-gestion-academica", label: "Docencia y gestión académica" },
+      { value: "atencion-experiencia-cliente", label: "Atención y experiencia del cliente" },
+      { value: "gestion-proyectos-innovacion", label: "Gestión de proyectos e innovación" },
+      { value: "atencion-clinica-asistencial", label: "Atención clínica y asistencial en salud" },
+      { value: "salud-publica-gestion-servicios", label: "Salud pública y gestión de servicios de salud" },
+      { value: "gestion-politicas-programas-publicos", label: "Gestión de políticas, programas y servicios públicos" },
+      { value: "otra-area-funcion", label: "Otra área o función" },
+      { value: "sin-experiencia", label: "Aún no tengo experiencia laboral" }
+    ]
+  },
+
+  {
+    id: "p11",
+    section: SECTIONS.perfil,
+    prompt: "¿Cuál de las siguientes opciones describe mejor tu nivel de responsabilidad en el trabajo?",
+    help: "Según las funciones que desempeñas. Si trabajas de manera independiente o tienes un negocio, considera también tus responsabilidades. Si actualmente no trabajas, responde sobre tu experiencia laboral más reciente.",
+    type: "single",
+    renderStyle: "list",
+    options: [
+      { value: "practicante-asistente", label: "Practicante o asistente: realizo principalmente funciones de apoyo" },
+      { value: "profesional-sin-cargo", label: "Profesional sin personal a cargo: desempeño funciones profesionales o especializadas, por ejemplo, como analista, especialista, docente o médico" },
+      { value: "coordinador-supervisor", label: "Coordinador o supervisor: coordino o superviso el trabajo de un equipo" },
+      { value: "jefe-responsable-area", label: "Jefe o responsable de un área o servicio: tengo a cargo su funcionamiento y resultados" },
+      { value: "gerente-director", label: "Gerente o director: dirijo una organización o una unidad y tomo decisiones estratégicas" },
+      { value: "ninguna-opcion", label: "Ninguna de las opciones describe adecuadamente mi responsabilidad" },
+      { value: "sin-experiencia", label: "Aún no tengo experiencia laboral" }
+    ]
+  },
+
+  /* ---------- Sección: Tu sector de trabajo ---------- */
+
+  {
+    id: "p12",
+    section: SECTIONS.sector,
+    prompt: "¿Cuál es la actividad principal de la organización donde trabajas?",
+    help: "Si actualmente no trabajas, responde pensando en tu organización más reciente. Si eres independiente, elige el sector en el que desarrollas principalmente tu actividad.",
+    type: "single",
+    renderStyle: "grid",
+    options: [
+      { value: "agricultura-ganaderia-pesca-acuicultura", label: "Agricultura, ganadería, pesca o acuicultura" },
+      { value: "industria-manufactura", label: "Industria y manufactura" },
+      { value: "mineria", label: "Minería" },
+      { value: "energia-agua-saneamiento", label: "Energía, agua y servicios de saneamiento" },
+      { value: "construccion-infraestructura", label: "Construcción e infraestructura" },
+      { value: "actividades-inmobiliarias", label: "Actividades inmobiliarias" },
+      { value: "comercio-retail", label: "Comercio y retail" },
+      { value: "transporte-almacenamiento-logistico", label: "Transporte, almacenamiento y servicios logísticos" },
+      { value: "servicios-financieros-seguros", label: "Servicios financieros y seguros" },
+      { value: "salud", label: "Salud" },
+      { value: "educacion", label: "Educación" },
+      { value: "tecnologia-telecomunicaciones", label: "Tecnología y telecomunicaciones" },
+      { value: "turismo-hoteleria-restaurantes", label: "Turismo, hotelería y restaurantes" },
+      { value: "consultoria-servicios-profesionales", label: "Consultoría y servicios profesionales" },
+      { value: "administracion-publica", label: "Administración pública" },
+      { value: "cultura-entretenimiento-deporte", label: "Cultura, entretenimiento y deporte" },
+      { value: "otra-actividad", label: "Otra actividad" },
+      { value: "sin-experiencia", label: "Aún no tengo experiencia laboral" }
+    ]
+  },
 
   /* ---------- Sección: Tus intereses de capacitación ---------- */
 
@@ -167,7 +276,6 @@ const QUESTIONS = [
     id: "p3",
     section: SECTIONS.modalidad,
     prompt: "¿En qué modalidad te gustaría capacitarte durante 2027?",
-    help: "Selecciona la modalidad que elegirías como tu opción principal y secundaria.",
     type: "ranking",
     rankCount: 2,
     options: [
@@ -218,9 +326,11 @@ const QUESTIONS = [
     ]
   },
 
+  /* ---------- Sección: Ubicación y duración ---------- */
+
   {
     id: "p4a",
-    section: SECTIONS.ubicacion,
+    section: SECTIONS.ubicacionDuracion,
     prompt: "¿Desde qué país y ciudad participarías?",
     type: "text",
     fields: [
@@ -232,7 +342,7 @@ const QUESTIONS = [
 
   {
     id: "p4b",
-    section: SECTIONS.ubicacion,
+    section: SECTIONS.ubicacionDuracion,
     prompt: "¿En qué ciudad podrías asistir regularmente a clases presenciales?",
     type: "text",
     fields: [
@@ -243,7 +353,7 @@ const QUESTIONS = [
 
   {
     id: "p4c",
-    section: SECTIONS.ubicacion,
+    section: SECTIONS.ubicacionDuracion,
     prompt: "¿Desde qué distrito te trasladarías habitualmente a las clases?",
     type: "text",
     fields: [
@@ -254,12 +364,9 @@ const QUESTIONS = [
       textIncludesAny(answers.p4b_ciudad, ["lima", "callao"])
   },
 
-  /* ---------- Duración (sin nueva sección explícita en el brief, se
-     etiqueta aparte para mayor claridad de navegación) ---------- */
-
   {
     id: "p5",
-    section: SECTIONS.duracion,
+    section: SECTIONS.ubicacionDuracion,
     prompt: "¿Qué duración total se adapta mejor a la capacitación que buscas para 2027?",
     help: "Considera el total de horas de la capacitación, no las horas por semana.",
     type: "ranking",
@@ -358,102 +465,6 @@ const QUESTIONS = [
       { value: "no-claro-que-estudiar", label: "Aún no tener claro qué necesito estudiar" },
       { value: "ninguna", label: "No identifico dificultades importantes" },
       { value: "otra-dificultad", label: "Otra dificultad" }
-    ]
-  },
-
-  /* ---------- Sección: Tu experiencia con Educación Ejecutiva USIL ---------- */
-
-  {
-    id: "p9",
-    section: SECTIONS.experiencia,
-    prompt: "¿Cuál de las siguientes opciones describe tu experiencia más reciente como alumno de Educación Ejecutiva USIL?",
-    help: "Si estudiaste en varios años, considera el más reciente. Si actualmente eres alumno, marca la primera alternativa.",
-    type: "single",
-    renderStyle: "list",
-    options: [
-      { value: "actual-alumno", label: "Actualmente soy alumno de Educación Ejecutiva USIL" },
-      { value: "alumno-2026", label: "Fui alumno de Educación Ejecutiva USIL en 2026" },
-      { value: "alumno-2025", label: "Fui alumno de Educación Ejecutiva USIL en 2025" },
-      { value: "alumno-2024-antes", label: "Fui alumno de Educación Ejecutiva USIL en 2024 o antes" },
-      { value: "no-alumno", label: "No he sido alumno de Educación Ejecutiva USIL" },
-      { value: "no-recuerda-anio", label: "No recuerdo el año en que fui alumno" }
-    ]
-  },
-
-  /* ---------- Sección: Tu perfil profesional ---------- */
-
-  {
-    id: "p10",
-    section: SECTIONS.perfil,
-    prompt: "¿En qué área o función te desempeñas principalmente?",
-    help: "Si actualmente no trabajas, considera tu experiencia laboral más reciente.",
-    type: "single",
-    renderStyle: "grid",
-    options: [
-      { value: "administracion-direccion-general", label: "Administración y dirección general" },
-      { value: "finanzas-contabilidad-presupuesto", label: "Finanzas, contabilidad y presupuesto" },
-      { value: "marketing-comunicacion", label: "Marketing y comunicación" },
-      { value: "ventas-gestion-comercial", label: "Ventas y gestión comercial" },
-      { value: "rrhh-gestion-personas", label: "Recursos humanos y gestión de personas" },
-      { value: "operaciones-produccion-calidad", label: "Operaciones, producción y calidad" },
-      { value: "logistica-compras-abastecimiento", label: "Logística, compras y abastecimiento" },
-      { value: "tecnologia-sistemas-datos", label: "Tecnología, sistemas y análisis de datos" },
-      { value: "asesoria-legal-cumplimiento", label: "Asesoría legal y cumplimiento normativo" },
-      { value: "docencia-gestion-academica", label: "Docencia y gestión académica" },
-      { value: "atencion-experiencia-cliente", label: "Atención y experiencia del cliente" },
-      { value: "gestion-proyectos-innovacion", label: "Gestión de proyectos e innovación" },
-      { value: "atencion-clinica-asistencial", label: "Atención clínica y asistencial en salud" },
-      { value: "salud-publica-gestion-servicios", label: "Salud pública y gestión de servicios de salud" },
-      { value: "gestion-politicas-programas-publicos", label: "Gestión de políticas, programas y servicios públicos" },
-      { value: "otra-area-funcion", label: "Otra área o función" },
-      { value: "sin-experiencia", label: "Aún no tengo experiencia laboral" }
-    ]
-  },
-
-  {
-    id: "p11",
-    section: SECTIONS.perfil,
-    prompt: "¿Cuál de las siguientes opciones describe mejor tu nivel de responsabilidad en el trabajo?",
-    type: "single",
-    renderStyle: "list",
-    options: [
-      { value: "practicante-asistente", label: "Practicante o asistente: realizo principalmente funciones de apoyo" },
-      { value: "profesional-sin-cargo", label: "Profesional sin personal a cargo: desempeño funciones profesionales o especializadas, por ejemplo, como analista, especialista, docente o médico" },
-      { value: "coordinador-supervisor", label: "Coordinador o supervisor: coordino o superviso el trabajo de un equipo" },
-      { value: "jefe-responsable-area", label: "Jefe o responsable de un área o servicio: tengo a cargo su funcionamiento y resultados" },
-      { value: "gerente-director", label: "Gerente o director: dirijo una organización o una unidad y tomo decisiones estratégicas" },
-      { value: "ninguna-opcion", label: "Ninguna de las opciones describe adecuadamente mi responsabilidad" },
-      { value: "sin-experiencia", label: "Aún no tengo experiencia laboral" }
-    ]
-  },
-
-  /* ---------- Sección: Tu sector de trabajo ---------- */
-
-  {
-    id: "p12",
-    section: SECTIONS.sector,
-    prompt: "¿Cuál es la actividad principal de la organización donde trabajas?",
-    type: "single",
-    renderStyle: "grid",
-    options: [
-      { value: "agricultura-ganaderia-pesca-acuicultura", label: "Agricultura, ganadería, pesca o acuicultura" },
-      { value: "industria-manufactura", label: "Industria y manufactura" },
-      { value: "mineria", label: "Minería" },
-      { value: "energia-agua-saneamiento", label: "Energía, agua y servicios de saneamiento" },
-      { value: "construccion-infraestructura", label: "Construcción e infraestructura" },
-      { value: "actividades-inmobiliarias", label: "Actividades inmobiliarias" },
-      { value: "comercio-retail", label: "Comercio y retail" },
-      { value: "transporte-almacenamiento-logistico", label: "Transporte, almacenamiento y servicios logísticos" },
-      { value: "servicios-financieros-seguros", label: "Servicios financieros y seguros" },
-      { value: "salud", label: "Salud" },
-      { value: "educacion", label: "Educación" },
-      { value: "tecnologia-telecomunicaciones", label: "Tecnología y telecomunicaciones" },
-      { value: "turismo-hoteleria-restaurantes", label: "Turismo, hotelería y restaurantes" },
-      { value: "consultoria-servicios-profesionales", label: "Consultoría y servicios profesionales" },
-      { value: "administracion-publica", label: "Administración pública" },
-      { value: "cultura-entretenimiento-deporte", label: "Cultura, entretenimiento y deporte" },
-      { value: "otra-actividad", label: "Otra actividad" },
-      { value: "sin-experiencia", label: "Aún no tengo experiencia laboral" }
     ]
   }
 ];

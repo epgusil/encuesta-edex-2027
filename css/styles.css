@@ -315,6 +315,28 @@ img, svg { display: block; max-width: 100%; }
   max-width: 62ch;
 }
 
+.selection-hint {
+  display: inline-block;
+  margin: 0 0 1rem;
+  padding: .32rem .8rem;
+  border-radius: 999px;
+  background: var(--color-accent-soft);
+  color: var(--color-primary);
+  font-size: .74rem;
+  font-weight: 600;
+  letter-spacing: .01em;
+}
+
+.rank-explainer {
+  font-size: .88rem;
+  color: var(--color-ink-soft);
+  line-height: 1.55;
+  margin: 0 0 1.85rem;
+  padding-left: .75rem;
+  border-left: 2px solid var(--color-accent);
+  max-width: 60ch;
+}
+
 .question-body { max-width: 640px; }
 
 /* ---------- Opciones: grid / lista ---------- */
