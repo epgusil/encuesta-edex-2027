@@ -112,6 +112,7 @@ const QUESTIONS = [
   {
     id: "p9",
     section: SECTIONS.experiencia,
+    sheetLabel: "Experiencia con Educación Ejecutiva USIL",
     prompt: "¿Cuál de las siguientes opciones describe tu experiencia más reciente como alumno de Educación Ejecutiva USIL?",
     help: "Si estudiaste en varios años, considera el más reciente. Si actualmente eres alumno, marca la primera alternativa.",
     type: "single",
@@ -131,6 +132,7 @@ const QUESTIONS = [
   {
     id: "p10",
     section: SECTIONS.perfil,
+    sheetLabel: "Área o función profesional",
     prompt: "¿En qué área o función te desempeñas principalmente?",
     help: "Selecciona la opción que mejor describa el trabajo que realizas, independientemente del sector de tu organización. Si actualmente no trabajas, considera tu experiencia laboral más reciente.",
     type: "single",
@@ -159,6 +161,7 @@ const QUESTIONS = [
   {
     id: "p11",
     section: SECTIONS.perfil,
+    sheetLabel: "Nivel de responsabilidad",
     prompt: "¿Cuál de las siguientes opciones describe mejor tu nivel de responsabilidad en el trabajo?",
     help: "Según las funciones que desempeñas. Si trabajas de manera independiente o tienes un negocio, considera también tus responsabilidades. Si actualmente no trabajas, responde sobre tu experiencia laboral más reciente.",
     type: "single",
@@ -179,6 +182,7 @@ const QUESTIONS = [
   {
     id: "p12",
     section: SECTIONS.sector,
+    sheetLabel: "Sector de la organización",
     prompt: "¿Cuál es la actividad principal de la organización donde trabajas?",
     help: "Si actualmente no trabajas, responde pensando en tu organización más reciente. Si eres independiente, elige el sector en el que desarrollas principalmente tu actividad.",
     type: "single",
@@ -210,6 +214,7 @@ const QUESTIONS = [
   {
     id: "p1",
     section: SECTIONS.intereses,
+    sheetLabel: "Campos de interés (hasta 3)",
     prompt: "¿En cuál de los siguientes campos te gustaría capacitarte principalmente durante 2027?",
     help: "Piensa en lo que quieres aprender, independientemente del sector donde trabajas.",
     type: "multi",
@@ -243,6 +248,7 @@ const QUESTIONS = [
   {
     id: "p2",
     section: SECTIONS.intereses,
+    sheetLabel: "Sector de aplicación (hasta 2)",
     prompt: "¿En qué sector te gustaría aplicar principalmente esos conocimientos?",
     help: "No necesariamente tiene que ser el sector donde trabajas actualmente.",
     type: "multi",
@@ -275,6 +281,7 @@ const QUESTIONS = [
   {
     id: "p3",
     section: SECTIONS.modalidad,
+    sheetLabel: "Modalidad preferida (1ª; 2ª)",
     prompt: "¿En qué modalidad te gustaría capacitarte durante 2027?",
     type: "ranking",
     rankCount: 2,
@@ -292,6 +299,7 @@ const QUESTIONS = [
   {
     id: "p4",
     section: SECTIONS.ubicacion,
+    sheetLabel: "Región de participación",
     prompt: "¿Desde qué lugar participarías habitualmente en la capacitación?",
     help: "Selecciona el departamento o región desde el que te conectarías o te trasladarías a clases. Si participarías desde otro país, selecciona «Fuera del Perú».",
     type: "single",
@@ -334,8 +342,8 @@ const QUESTIONS = [
     prompt: "¿Desde qué país y ciudad participarías?",
     type: "text",
     fields: [
-      { key: "pais", label: "País", placeholder: "Ej. México" },
-      { key: "ciudad", label: "Ciudad", placeholder: "Ej. Ciudad de México" }
+      { key: "pais", label: "País", placeholder: "Ej. México", sheetLabel: "País (fuera del Perú)" },
+      { key: "ciudad", label: "Ciudad", placeholder: "Ej. Ciudad de México", sheetLabel: "Ciudad (fuera del Perú)" }
     ],
     condition: (answers) => answers.p4 === "fuera-peru"
   },
@@ -346,7 +354,7 @@ const QUESTIONS = [
     prompt: "¿En qué ciudad podrías asistir regularmente a clases presenciales?",
     type: "text",
     fields: [
-      { key: "ciudad", label: "Ciudad", placeholder: "Ej. Lima Metropolitana" }
+      { key: "ciudad", label: "Ciudad", placeholder: "Ej. Lima Metropolitana", sheetLabel: "Ciudad de asistencia presencial" }
     ],
     condition: (answers) => p3Includes(answers, MODALIDADES_PRESENCIALES)
   },
@@ -357,7 +365,7 @@ const QUESTIONS = [
     prompt: "¿Desde qué distrito te trasladarías habitualmente a las clases?",
     type: "text",
     fields: [
-      { key: "distrito", label: "Distrito", placeholder: "Ej. San Isidro" }
+      { key: "distrito", label: "Distrito", placeholder: "Ej. San Isidro", sheetLabel: "Distrito de traslado" }
     ],
     condition: (answers) =>
       p3Includes(answers, MODALIDADES_PRESENCIALES) &&
@@ -367,6 +375,7 @@ const QUESTIONS = [
   {
     id: "p5",
     section: SECTIONS.ubicacionDuracion,
+    sheetLabel: "Duración preferida (1ª; 2ª; 3ª)",
     prompt: "¿Qué duración total se adapta mejor a la capacitación que buscas para 2027?",
     help: "Considera el total de horas de la capacitación, no las horas por semana.",
     type: "ranking",
@@ -386,6 +395,7 @@ const QUESTIONS = [
   {
     id: "p6",
     section: SECTIONS.horarios,
+    sheetLabel: "Días disponibles",
     prompt: "Si eligieras clases con horario establecido, ¿qué días podrías asistir con mayor regularidad?",
     blockNote:
       "Responde este bloque si alguna de tus modalidades elegidas incluye clases con horario " +
@@ -409,6 +419,7 @@ const QUESTIONS = [
   {
     id: "p7",
     section: SECTIONS.horarios,
+    sheetLabel: "Horario lunes a viernes (1ª; 2ª)",
     prompt: "Si llevaras clases de lunes a viernes, ¿qué horario podrías cumplir con mayor regularidad?",
     help: "Los horarios están expresados en hora de Perú.",
     type: "ranking",
@@ -427,6 +438,7 @@ const QUESTIONS = [
   {
     id: "p7a",
     section: SECTIONS.horarios,
+    sheetLabel: "Franja de fin de semana (1ª; 2ª)",
     prompt: "Para las clases de fin de semana, ¿qué franja prefieres?",
     help: "Los horarios están expresados en hora de Perú.",
     type: "ranking",
@@ -446,6 +458,7 @@ const QUESTIONS = [
   {
     id: "p8",
     section: SECTIONS.dificultades,
+    sheetLabel: "Principales dificultades",
     prompt: "¿Cuáles serían las principales dificultades para que puedas capacitarte en 2027?",
     help: "Si no identificas dificultades, marca únicamente esa alternativa.",
     type: "multi",

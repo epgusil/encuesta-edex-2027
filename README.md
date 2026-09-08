@@ -147,49 +147,45 @@ aparece nada:
 ### Cómo funciona por dentro
 
 - `submitSurvey()` en `js/app.js` arma un objeto plano a partir de las
-  respuestas (las preguntas de selección múltiple y de ranking se
-  unen con `"; "` — en las de ranking, el orden del texto respeta el
-  orden de preferencia: el primer valor es la 1ª preferencia) y lo
-  envía por `fetch` con `mode: "no-cors"` y `Content-Type: text/plain`.
-  Esa combinación evita el preflight de CORS que Apps Script no
-  responde bien; el script igual lee y parsea el JSON del body sin
-  problema.
+  respuestas, usando como encabezado de columna el `sheetLabel` de
+  cada pregunta (definido junto a ella en `js/questions.js`) — por
+  eso las columnas de la hoja salen legibles ("Modalidad preferida
+  (1ª; 2ª)") en vez de los ids internos ("p3"). Las preguntas de
+  selección múltiple y de ranking se unen con `"; "` — en las de
+  ranking, el orden del texto respeta el orden de preferencia: el
+  primer valor es la 1ª preferencia.
+- Ese objeto se envía por `fetch` con `mode: "no-cors"` y
+  `Content-Type: text/plain`. Esa combinación evita el preflight de
+  CORS que Apps Script no responde bien; el script igual lee y
+  parsea el JSON del body sin problema.
 - Como la respuesta llega "opaca" (no se puede leer su contenido ni
   status con `no-cors`), el envío es *fire-and-forget*: nunca bloquea
   ni condiciona que se muestre la pantalla de agradecimiento.
 - El script (`apps-script/Code.gs`) crea la hoja "Respuestas" si no
   existe, y agrega columnas nuevas automáticamente la primera vez que
-  aparece un campo que no tenía — si más adelante agregas o quitas
-  preguntas en `js/questions.js`, no hace falta tocar el script.
+  aparece un encabezado que no tenía — si más adelante agregas o
+  quitas preguntas en `js/questions.js`, no hace falta tocar el
+  script.
 - Sigue guardándose además una copia en `localStorage` del navegador
   de cada persona, independiente de si el envío a Sheets funcionó o
   no — es solo un respaldo local, no reemplaza la planilla.
 
-### Diccionario de columnas
+### Si quieres cambiar el texto de alguna columna
 
-Las columnas de la hoja usan los mismos identificadores internos de
-`js/questions.js`, no el texto completo de la pregunta (para que cada
-fila no sea gigante). Referencia rápida:
+El nombre de cada columna sale del campo `sheetLabel` de esa pregunta
+en `js/questions.js` (para las preguntas de texto libre como país,
+ciudad o distrito, está dentro de su `fields`). Para renombrar una
+columna, edita ese texto — no hace falta tocar `apps-script/Code.gs`
+ni `app.js`.
 
-| Columna | Pregunta |
-|---|---|
-| `p9` | Experiencia como alumno de Educación Ejecutiva USIL |
-| `p10` | Área o función profesional |
-| `p11` | Nivel de responsabilidad en el trabajo |
-| `p12` | Actividad principal de la organización |
-| `p1` | Campos de interés para capacitarse (hasta 3) |
-| `p2` | Sector de aplicación de esos conocimientos (hasta 2) |
-| `p3` | Modalidad — orden: 1ª preferencia; 2ª preferencia |
-| `p4` | Departamento/región de participación |
-| `p4a_pais`, `p4a_ciudad` | País y ciudad (si eligió "Fuera del Perú") |
-| `p4b_ciudad` | Ciudad de asistencia presencial |
-| `p4c_distrito` | Distrito (si la ciudad es Lima Metropolitana o Callao) |
-| `p5` | Duración — orden: 1ª; 2ª; 3ª preferencia |
-| `p6` | Días disponibles (hasta 3) |
-| `p7` | Horario lunes a viernes — orden: 1ª; 2ª preferencia |
-| `p7a` | Franja de fin de semana — orden: 1ª; 2ª preferencia |
-| `p8` | Principales dificultades (hasta 2) |
-| `submittedAt` | Fecha y hora de envío (UTC) |
+Ojo: como las columnas se identifican por el texto exacto del
+encabezado, si renombras un `sheetLabel` **después** de haber recibido
+respuestas, la hoja va a crear una columna nueva con el nombre nuevo
+en vez de renombrar la existente (las respuestas viejas quedan en la
+columna anterior). Para evitarlo, renombra también el encabezado ya
+existente directamente en la hoja de cálculo, a mano, antes de que
+lleguen más respuestas con el nombre nuevo.
+
 
 No es necesario tocar ninguna otra parte del código: el resto de la
 encuesta (preguntas, validación, navegación, diseño) es independiente

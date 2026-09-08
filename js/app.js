@@ -727,20 +727,32 @@
   // Pega aquí la URL de tu Web App de Google Apps Script (termina en
   // "/exec"). Mientras esté vacía, la encuesta sigue funcionando normal:
   // solo guarda una copia local en localStorage y no envía nada afuera.
-  const GOOGLE_SHEETS_ENDPOINT = "https://script.google.com/macros/s/AKfycbyINl-pQsPxzxLydUWls43nToqGleUF-nHdxaTozOQHxgEv--v0meEpAP4XRg2r1zhL/exec";
+  const GOOGLE_SHEETS_ENDPOINT = "https://script.google.com/macros/library/d/14HPFX27jOQEFL4rSr5VM71DL7NXST9EveYUVhKyQ26kIljFsQEYxCQ7d/1";
 
   // Convierte answers (con arreglos para preguntas multi/ranking) en un
-  // objeto plano de una sola fila: los arreglos se unen con "; " —en las
-  // preguntas de ranking eso además conserva el orden de preferencia
-  // (el primer valor de la lista es la 1ª preferencia, el segundo la 2ª,
-  // etc.). Las claves quedan igual que en `answers` (p1, p2, p4a_pais...)
-  // para que cualquier pregunta nueva que se agregue en questions.js
-  // fluya sola, sin tocar este mapeo.
+  // objeto plano de una sola fila, usando como clave el `sheetLabel`
+  // legible de cada pregunta (definido en questions.js) en vez del id
+  // interno (p1, p4b_ciudad...). Recorre QUESTIONS en orden, así que las
+  // columnas quedan siempre en el mismo orden sin importar el camino de
+  // skip logic que haya seguido cada persona. Los arreglos se unen con
+  // "; " —en las preguntas de ranking eso conserva el orden de
+  // preferencia (el primer valor es la 1ª preferencia, el segundo la 2ª,
+  // etc.). Si una pregunta nueva no tiene `sheetLabel` todavía, usa su
+  // `id` como respaldo para que igual llegue a la hoja.
   function flattenAnswersForSheet(answers) {
     const flat = {};
-    Object.keys(answers).forEach((key) => {
-      const val = answers[key];
-      flat[key] = Array.isArray(val) ? val.join("; ") : val;
+    QUESTIONS.forEach((q) => {
+      if (q.type === "text") {
+        q.fields.forEach((f) => {
+          const val = answers[q.id + "_" + f.key];
+          if (val === undefined || val === "") return;
+          flat[f.sheetLabel || `${q.id}_${f.key}`] = val;
+        });
+        return;
+      }
+      const val = answers[q.id];
+      if (val === undefined) return;
+      flat[q.sheetLabel || q.id] = Array.isArray(val) ? val.join("; ") : val;
     });
     return flat;
   }
@@ -778,16 +790,14 @@
 
     if (!GOOGLE_SHEETS_ENDPOINT) return;
 
-    const sheetPayload = {
-      submittedAt: payload.submittedAt,
-      answers: flattenAnswersForSheet(answers)
-    };
+    const sheetData = flattenAnswersForSheet(answers);
+    sheetData["Fecha y hora de envío (UTC)"] = payload.submittedAt;
 
     fetch(GOOGLE_SHEETS_ENDPOINT, {
       method: "POST",
       mode: "no-cors",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(sheetPayload)
+      body: JSON.stringify({ answers: sheetData })
     }).catch((err) => {
       console.warn("No se pudo enviar la encuesta a Google Sheets:", err);
     });

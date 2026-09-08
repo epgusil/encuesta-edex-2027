@@ -4,13 +4,15 @@
  * Endpoint de Google Apps Script para la encuesta USIL 2027.
  *
  * QUÉ HACE:
- *   Recibe un POST con { submittedAt, answers } (JSON) desde la
- *   encuesta estática (js/app.js -> submitSurvey) y agrega una fila
- *   nueva en la hoja "Respuestas" de la planilla donde vive este
- *   script. Si aparece una pregunta/columna nueva que no existía
- *   antes (por ejemplo si más adelante se agrega una pregunta en
- *   questions.js), crea la columna automáticamente — no hay que
- *   tocar este script cada vez que cambia la encuesta.
+ *   Recibe un POST con { answers } (JSON) desde la encuesta estática
+ *   (js/app.js -> submitSurvey) y agrega una fila nueva en la hoja
+ *   "Respuestas" de la planilla donde vive este script. `answers` ya
+ *   viene con encabezados legibles (el `sheetLabel` de cada pregunta,
+ *   definido en questions.js) en vez de ids internos como "p1" o
+ *   "p4b_ciudad". Si aparece una columna que la hoja todavía no tiene
+ *   (por ejemplo si más adelante se agrega una pregunta nueva), la
+ *   crea automáticamente — no hay que tocar este script cada vez que
+ *   cambia la encuesta.
  *
  * CÓMO SE INSTALA: ver README.md, sección "Conectar con Google
  * Sheets (Apps Script)".
@@ -27,8 +29,17 @@ function doPost(e) {
     var sheet = getOrCreateSheet_();
     var body = JSON.parse(e.postData.contents);
 
+    // El cliente (js/app.js) ya manda los datos con encabezados legibles
+    // (sheetLabel de cada pregunta, ej. "Modalidad preferida (1ª; 2ª)")
+    // en vez de ids internos — este script no necesita saber nada sobre
+    // la encuesta, solo escribe lo que llega.
     var data = body.answers || {};
-    data["submittedAt"] = body.submittedAt || new Date().toISOString();
+
+    // Respaldo por si el envío no trajera su propia fecha (o llegara de
+    // un cliente viejo): no pisa la del cliente si ya existe.
+    if (!data["Fecha y hora de envío (UTC)"]) {
+      data["Recibido en el servidor (UTC)"] = new Date().toISOString();
+    }
 
     var headers = getCurrentHeaders_(sheet);
 
