@@ -727,7 +727,7 @@
   // Pega aquí la URL de tu Web App de Google Apps Script (termina en
   // "/exec"). Mientras esté vacía, la encuesta sigue funcionando normal:
   // solo guarda una copia local en localStorage y no envía nada afuera.
-  const GOOGLE_SHEETS_ENDPOINT = "https://script.google.com/macros/s/AKfycbyINl-pQsPxzxLydUWls43nToqGleUF-nHdxaTozOQHxgEv--v0meEpAP4XRg2r1zhL/exec";
+  const GOOGLE_SHEETS_ENDPOINT = "https://script.google.com/macros/s/AKfycby_bL3NFtcjp7lHgyrqm1sX6BoVfdHFMvv88Yy3KTO1joAuoYFHd735OlIFnRGTtwWQ/exec";
 
   // Convierte answers (con arreglos para preguntas multi/ranking) en un
   // objeto plano de una sola fila, usando como clave el `sheetLabel`
